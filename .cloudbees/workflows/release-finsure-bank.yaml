@@ -1,16 +1,6 @@
 apiVersion: automation.cloudbees.io/v1alpha1
 kind: workflow
 name: finsure-bank-regulated-release
-
-# Regulated release orchestration for FinSure Bank — a STAGED workflow.
-# Deploy stages map to environments and call the reusable deployer, which
-# simulates deploying each component. Governance/validation/approval/evidence
-# jobs run mock steps and publish evidence to the run's Evidence tab.
-#
-# Setup in CloudBees Unify: the target environments (staging, prod) must exist
-# and be associated with the application, and the component must be part of the
-# application. Deploys are simulated (no real cluster).
-
 on:
   workflow_dispatch:
     inputs:
@@ -23,7 +13,6 @@ on:
       release_window:
         type: string
         default: Saturday 22:00-23:00 ET
-
 metadata:
   stages/v1alpha1:
     - name: Governance
@@ -36,13 +25,13 @@ metadata:
     - name: Production Approval
       jobs:
         - production-approval
+        - manual-approval-to-prod
     - name: Production
       jobs:
         - deploy-production
     - name: Post-Release
       jobs:
         - release-evidence
-
 jobs:
   governance-review:
     steps:
@@ -64,19 +53,15 @@ jobs:
             - Release window: ${{ inputs.release_window }}
             - Unit tests / security scans / approvals: verified
             - Audit evidence: **complete**
-
   deploy-staging:
-    needs:
-      - governance-review
+    needs: governance-review
     environment: staging
     uses: ./.cloudbees/workflows/deployer.yaml
     with:
       manifest: ${{ inputs.manifest }}
       environment: ${{ job.environment }}
-
   staging-validation:
-    needs:
-      - deploy-staging
+    needs: deploy-staging
     steps:
       - name: Run smoke tests and release checks
         uses: docker://alpine:3.20
@@ -95,10 +80,8 @@ jobs:
             - SLO dashboards: within thresholds
             - Audit controls: validated
             - Status: **passed**
-
   production-approval:
-    needs:
-      - staging-validation
+    needs: staging-validation
     steps:
       - name: Production approval (demo talking point)
         uses: docker://alpine:3.20
@@ -115,19 +98,15 @@ jobs:
             - Approvers: Release Manager, Security, Application Owner
             - Change ticket: ${{ inputs.change_ticket }}
             - Decision: **approved** (simulated for demo)
-
   deploy-production:
-    needs:
-      - production-approval
+    needs: manual-approval-to-prod
     environment: prod
     uses: ./.cloudbees/workflows/deployer.yaml
     with:
       manifest: ${{ inputs.manifest }}
       environment: ${{ job.environment }}
-
   release-evidence:
-    needs:
-      - deploy-production
+    needs: deploy-production
     steps:
       - name: Publish release summary
         uses: docker://alpine:3.20
@@ -151,3 +130,12 @@ jobs:
             | Change ticket | ${{ inputs.change_ticket }} |
 
             Release: **COMPLETE**
+  manual-approval-to-prod:
+    needs:
+      - production-approval
+    timeout-minutes: 4320
+    delegates: cloudbees-io/manual-approval/custom-job.yml@v1
+    with:
+      disallowLaunchByUser: false
+      notifyAllEligibleUsers: false
+      approvers: 82666726-bfdb-11f1-9a81-42010a83ae0f
