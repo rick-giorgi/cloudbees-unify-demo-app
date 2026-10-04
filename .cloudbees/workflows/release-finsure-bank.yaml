@@ -25,7 +25,6 @@ metadata:
     - name: Production Approval
       jobs:
         - production-approval
-        - manual-approval-to-prod
     - name: Production
       jobs:
         - deploy-production
@@ -99,7 +98,7 @@ jobs:
             - Change ticket: ${{ inputs.change_ticket }}
             - Decision: **approved** (simulated for demo)
   deploy-production:
-    needs: manual-approval-to-prod
+    needs: production-approval
     environment: prod
     uses: ./.cloudbees/workflows/deployer.yaml
     with:
@@ -130,12 +129,3 @@ jobs:
             | Change ticket | ${{ inputs.change_ticket }} |
 
             Release: **COMPLETE**
-  manual-approval-to-prod:
-    needs:
-      - production-approval
-    timeout-minutes: 4320
-    delegates: cloudbees-io/manual-approval/custom-job.yml@v1
-    with:
-      disallowLaunchByUser: false
-      notifyAllEligibleUsers: false
-      approvers: 82666726-bfdb-11f1-9a81-42010a83ae0f
